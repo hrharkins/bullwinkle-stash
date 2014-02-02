@@ -331,16 +331,16 @@ class BWConstraintGenerator(str):   # -nodt (just too many...)
     def __rmul__(self, other):
         return BWConstraintGenerator('(%r) * (%r)' % (other, self))
 
-    def __div__(self, other):           # -nout
+    def __div__(self, other):           # -no-py3-ut (deprecated)
         return BWConstraintGenerator('(%r) / (%r)' % (self, other))
 
-    def __rdiv__(self, other):          # -nout
+    def __rdiv__(self, other):          # -no-py3-ut (deprecated)
         return BWConstraintGenerator('(%r) / (%r)' % (other, self))
 
-    def __truediv__(self, other):       # -no-py2-ut
+    def __truediv__(self, other):       # -no-py2-ut (py3/future)
         return BWConstraintGenerator('(%r) / (%r)' % (self, other))
 
-    def __rtruediv__(self, other):      # -no-py2-ut
+    def __rtruediv__(self, other):      # -no-py2-ut (py3/future)
         return BWConstraintGenerator('(%r) / (%r)' % (other, self))
 
     def __mod__(self, other):
