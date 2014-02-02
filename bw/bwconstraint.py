@@ -298,7 +298,7 @@ import warnings
 
 try:
     from StringIO import StringIO
-except ImportError:         # -nodt
+except ImportError:         # -nodt, -nout
     from io import StringIO
 
 INVALID = type(None)        # TODO: Better singleton constant
@@ -337,10 +337,10 @@ class BWConstraintGenerator(str):   # -nodt (just too many...)
     def __rdiv__(self, other):          # -nout
         return BWConstraintGenerator('(%r) / (%r)' % (other, self))
 
-    def __truediv__(self, other):
+    def __truediv__(self, other):       # -no-py2-ut
         return BWConstraintGenerator('(%r) / (%r)' % (self, other))
 
-    def __rtruediv__(self, other):
+    def __rtruediv__(self, other):      # -no-py2-ut
         return BWConstraintGenerator('(%r) / (%r)' % (other, self))
 
     def __mod__(self, other):
@@ -438,7 +438,7 @@ class BWConstraintGenerator(str):   # -nodt (just too many...)
     def __contains__(self, nominee):
         return nominee in +self
 
-    def __repr__(self):
+    def __repr__(self):                 # -nout
         return str(self)
 
 BWC = BWConstraintGenerator('#')
@@ -544,7 +544,7 @@ class BWManyInputConstraint(BWConstraint):
     def convert(self, source, invalid):
         return self.convert_in(source, self.constraints, invalid)
 
-    def __repr__(self):
+    def __repr__(self):             # -nout
         return self.repr_in(map(repr, self.constraints))
 
     @classmethod
@@ -559,7 +559,7 @@ class BWNeverConstraint(BWConstraint):
     def convert(self, source, invalid):
         return invalid
 
-    def __repr__(self):
+    def __repr__(self):             # -nout
         return 'NEVER'
 NEVER = BWNeverConstraint.constraint_never
 
@@ -572,8 +572,8 @@ class BWAlwaysConstraint(BWManyInputConstraint):
         return source           # -nodt -- won't be reached since check
                                 #           happens first
 
-    def __repr__(self):
-        return 'ALWAYS'         # -nout
+    def __repr__(self):             # -nout
+        return 'ALWAYS'
 ALWAYS = BWAlwaysConstraint.constraint_always
 
 @BWConstraint.register('constraint_any')
@@ -596,7 +596,7 @@ class BWAnyConstraint(BWManyInputConstraint):
         else:
             return invalid      # -nodt
 
-    def repr_in(self, constraint_reprs):
+    def repr_in(self, constraint_reprs):        # -nout
         return 'ANY(%s)' % ', '.join(constraint_reprs)
 ANY = BWAnyConstraint.from_multi
 
@@ -620,7 +620,7 @@ class BWAllConstraint(BWManyInputConstraint):
         else:
             return invalid
 
-    def repr_in(self, constraint_reprs):
+    def repr_in(self, constraint_reprs):        # -nout
         return 'ALL(%s)' % ', '.join(constraint_reprs)
 ALL = BWAllConstraint.from_multi
 
@@ -632,7 +632,7 @@ class BWInConstraint(BWConstraint):
     def check(self, nominee):
         return nominee in self.comparisons
 
-    def __repr__(self):
+    def __repr__(self):             # -nout
         return 'IN(%s)' % ', '.join(map(repr, self.comparisons))
 IN = BWInConstraint
 
@@ -644,7 +644,7 @@ class BWIsConstraint(BWConstraint):
     def check(self, nominee):
         return any(nominee is choice for choice in self.choices)
 
-    def __repr__(self):
+    def __repr__(self):         # -nout
         return 'IS(%s)' % ', '.join(map(repr, self.choices))
 IS = BWIsConstraint
 
@@ -657,7 +657,7 @@ class BWBareFunctionConstraint(BWConstraint):
     def check(self, nominee):
         return self.fn(nominee, **self.kw)
 
-    def __repr__(self):
+    def __repr__(self):         # -nout
         if '#' in self.name:
             return self.name
         else:
@@ -696,7 +696,7 @@ class BWConversionConstraint(BWConstraint):
         except:
             return invalid
 
-    def __repr__(self):
+    def __repr__(self):         # -nout
         if '#' in self.name:
             return 'INTO(%s)' % self.name
         else:
@@ -720,7 +720,7 @@ class BWIsaConstraint(BWConstraint):
         else:
             return invalid
 
-    def __repr__(self):
+    def __repr__(self):         # -nout
         return 'ISA(%s)' % ', '.join(type.__name__ for type in self.types)
 ISA = BWIsaConstraint
 

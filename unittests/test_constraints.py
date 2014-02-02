@@ -50,6 +50,11 @@ class TestSimpleConstraints(unittest.TestCase):
         self.assertIn(5, ALWAYS)
         self.assertEqual(5, ALWAYS.convert(5, None))
 
+    def test_coerce(self):
+        class X(object): pass
+        x = X()
+        self.assertIs(x, CHECK(X).coerce(x))
+
 class TestCompoundConstraints(unittest.TestCase):
     def test_or(self):
         self.assertIn(5, ISA(int) | ISA(float))
@@ -62,6 +67,25 @@ class TestCompoundConstraints(unittest.TestCase):
 
     def test_not(self):
         self.assertIn(6, ~CHECK(5))
+
+    def test_empty(self):
+        self.assertIn(5, ANY())
+        self.assertIn(5, ALL())
+
+    def test_convert(self):
+        self.assertEqual(5, ANY(ISA(int)) << '5')
+        self.assertEqual(5, ALL(ISA(int), BWC == 5) << '5')
+        self.assertIs(None, ANY(ISA(float)).coerce('hello'))
+        self.assertIs(None, ALL(ISA(float)).coerce('hello'))
+
+class TestFunctionConstraint(unittest.TestCase):
+    def test_fail(self):
+        self.assertNotIn('hello', FN(lambda x: x / 0))
+
+    def test_expr(self):
+        import warnings
+        warnings.filterwarnings('ignore', 'bw-expr:')
+        self.assertIn(5, EXPR('# == 5'))
 
 class TestBWC(unittest.TestCase):
     def test_arith(self):

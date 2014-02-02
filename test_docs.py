@@ -27,6 +27,7 @@ coverage_dir = os.path.join(coverage_dir, 'doctests-' + version_str)
 coverage_dir = os.path.abspath(coverage_dir)
 cov = coverage.coverage(data_file='.coverage-' + version_str)
 cov.exclude('-nodt')
+cov.exclude('-no-py%s-dt' % sys.version_info.major)
 cov.start()
 # TODO: Auto-discovery within bw/
 rv = doctest.testfile('bw/bwconstraint.py')
