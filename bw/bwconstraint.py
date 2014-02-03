@@ -135,6 +135,52 @@ Multiplication also works, but only in a brute-force manner currently:
     >>> (3, 4, 5, 'hello') in ISA(int) * 3 + ISA(str)
     True
 
+Dictionary Constraints
+======================
+
+Python dictionaries can also be checked:
+
+    >>> from bw import DICT
+    >>> dict(x=5) in DICT(x=int)
+    True
+    >>> dict(x='hello') in DICT(x=int)
+    False
+
+A default constraint can be specified without a keyword argument:
+
+    >>> dict(x=1) in DICT(int)
+    True
+    >>> dict(x=1.0) in DICT(int, float)
+    True
+
+If any keys are provided, only the keys specified are allowed.  Use ALWAYS
+as the default constraint to do otherwise:
+
+    >>> from bw import ALWAYS, NEVER
+    >>> DICT(x=int)
+    DICT(NEVER, x=ISA(int))
+    >>> dict(x=1, y='hello') in DICT(x=int)
+    False
+    >>> dict(x=1, y='hello') in DICT(ALWAYS, x=int)
+    True
+
+If no constraints are specified, any dictionary is allowed:
+
+    >>> dict(x=1) in DICT()
+    True
+
+Like collections, dictionary constraints can be created in shorthand.  They
+are created in ALWAYS mode by default  Provide a None key to check
+otherwise:
+
+    >>> from bw import DEFAULT
+    >>> dict(x=1) in ANY([], {'x': int})
+    True
+    >>> dict(x=1, y=1) in ANY([], {'x': int})
+    True
+    >>> dict(x=1, y=1) in ANY([], {DEFAULT: NEVER, 'x': int})
+    False
+
 Function Constraints
 ====================
 
@@ -408,6 +454,7 @@ except ImportError:         # -nodt, -nout
 
 INVALID = type(None)        # TODO: Better singleton constant
 AUTO = type(None)           # TODO: Better singleton constant
+DEFAULT = type(None)        # TODO: Better singleton constant
 
 # TODO: Move to util
 def filtration(src, srctype, factory=AUTO):
@@ -573,6 +620,9 @@ class BWConstraint(object):
             return +obj
         if isinstance(obj, BWConstraint):
             return obj(**_kw)
+        if type(obj) is dict:
+            default = obj.pop(DEFAULT, ALWAYS)
+            return cls.constraint_dict(default, **obj)
         if type(obj) is list:
             return cls.constraint_array(*obj, **_kw)
         if type(obj) is tuple:
@@ -927,6 +977,46 @@ class BWArrayConstraint(BWListConstraint, BWTupleConstraint):
     collection_types = (list, tuple)
     collection_fmt = 'ARRAY(%s)'
 ARRAY = BWArrayConstraint.from_multi
+
+@BWConstraint.register('constraint_dict', 'from_dict')
+class BWDictionaryConstraint(BWConstraint):
+    def __init__(_self, _default_constraint=ALWAYS, **_key_constraints):
+        _self.default_constraint = _default_constraint
+        _self.key_constraints = _key_constraints
+
+    def check(self, nominee):
+        default = self.default_constraint
+        for key in nominee:
+            check = self.key_constraints.get(key, default)
+            if check is not None:
+                if nominee[key] not in check:
+                    return False
+        else:
+            return True
+
+    @classmethod
+    def from_dict(_cls, *_default_constraint, **_kw):
+        if len(_default_constraint) > 1:
+            _default_constraint = ANY(*_default_constraint)
+        elif len(_default_constraint) == 1:
+            _default_constraint = _cls.from_generic(_default_constraint[0])
+        elif _kw:
+            _default_constraint = NEVER
+        else:
+            _default_constraint = ALWAYS
+
+        return _cls(_default_constraint,
+                    **dict((name, _cls.from_generic(value))
+                           for (name, value) in _kw.items()))
+
+    def __repr__(self):         # -nout
+        args = []
+        if self.default_constraint:
+            args.append(repr(self.default_constraint))
+        for key in self.key_constraints:
+            args.append('%s=%r' % (key, self.key_constraints[key]))
+        return 'DICT(%s)' % ', '.join(args)
+DICT = BWDictionaryConstraint.from_dict
 
 @BWConstraint.register('constraint_sequence', 'from_multi')
 class BWSequenceConstraint(BWManyInputConstraint):

@@ -177,6 +177,17 @@ class TestCollectionConstraints(unittest.TestCase):
         self.assertIn((2, 3, 4), CHECK([int]))
         self.assertNotIn(('hello', 3, 4), ARRAY(int))
 
+    def test_dict(self):
+        self.assertIn(dict(x=1), DICT())
+        self.assertIn(dict(x=1), DICT(int))
+        self.assertIn(dict(x=1.0), DICT(int, float))
+        self.assertIn(dict(x=1), DICT(x=int))
+        self.assertNotIn(dict(x='hello'), DICT(x=int))
+        self.assertIn(dict(x=1, y='hello'), DICT(ALWAYS, x=int))
+        self.assertNotIn(dict(x=1, y='hello'), DICT(x=int))
+        self.assertIn(dict(x=1, y='hello'), CHECK({'x':int}))
+        self.assertNotIn(dict(x=1, y='hello'), CHECK({DEFAULT: NEVER, 'x':int}))
+
 class TestSequenceConstraints(unittest.TestCase):
     def test_simple(self):
         self.assertIn((3, 4, 5), CHECK((int, int, int)))
