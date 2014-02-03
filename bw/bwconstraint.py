@@ -132,33 +132,47 @@ Protection Checks
 =================
 
 To check a value and throw an exception on failure, use the constraint as a
-callable:
+dictionary:
 
-    >>> any_number('hello')
+    >>> any_number['hello']
     Traceback (most recent call last):
         ...
     ValueError: 'hello' not valid for ISA(int, float, complex)
 
 The value is returned if it is valid:
 
-    >>> any_number(7)
+    >>> any_number[7]
     7
 
-Multiple values can be checked simulatneously, but are not returned:
+If a tuple, or multiple arguments are provided, they are returned as such:
 
-    >>> any_number(7, 8, 9)
+    >>> any_number[7, 8, 9]
+    (7, 8, 9)
+    >>> any_number['hello',]
+    Traceback (most recent call last):
+        ...
+    ValueError: 'hello' not valid for ISA(int, float, complex)
 
 Filtering
 =========
 
 The .filter and .filter_out methods provide means to return the included or
-excluded sets of inputs that match the constraint.  A generator is
-produced, so the result needs to be wrapped in other constructs if desired:
+excluded sets of inputs that match the constraint.  By default, the input
+type is preserved:
 
-    >>> list(any_number.filter(('hello', 7, 8)))
+    >>> any_number.filter(['hello', 7, 8])
     [7, 8]
-    >>> list(any_number.filter_out(('hello', 7, 8)))
+    >>> any_number.filter_out(['hello', 7, 8])
     ['hello']
+
+Generators are also acceptable, but returns a generator in turn:
+
+    (Necessary for Python2/3 unified doctests)
+    >>> try: ignore = xrange
+    ... except NameError: xrange = range 
+
+    >>> type((+(BWC < 5)).filter(xrange(10))).__name__
+    'generator'
 
 Conversions
 ===========
@@ -302,6 +316,24 @@ except ImportError:         # -nodt, -nout
     from io import StringIO
 
 INVALID = type(None)        # TODO: Better singleton constant
+AUTO = type(None)           # TODO: Better singleton constant
+
+# TODO: Move to util
+def filtration(src, srctype, factory=AUTO):
+    '''
+    Convenience function to create an output for src generator based on the
+    factory and srctype specified.
+    '''
+
+    if factory is AUTO:
+        if issubclass(srctype, (tuple, list, set, frozenset)):
+            factory = srctype
+        else:
+            factory = None
+    if factory is not None:
+        return factory(src)
+    else:
+        return src
 
 class BWConstraintGenerator(str):   # -nodt (just too many...)
     def __neg__(self):
@@ -456,15 +488,17 @@ class BWConstraint(object):
             return cls.constraint_pyobject(obj, **_kw)
 
     def __call__(self, *_checks, **_kw):
-        if _checks:
-            for check in _checks:
+        return self
+
+    def __getitem__(self, checks):
+        if isinstance(checks, tuple):
+            for check in checks:
                 if check not in self:
                     raise ValueError('%r not valid for %r' % (check, self))
-            else:
-                if len(_checks) == 1:
-                    return _checks[0]
         else:
-            return self
+            if checks not in self:
+                raise ValueError('%r not valid for %r' % (checks, self))
+        return checks
 
     def convert(self, source, invalid):
         return invalid                  # -nout
@@ -483,11 +517,13 @@ class BWConstraint(object):
             return cls
         return registrar
 
-    def filter(self, src):
-        return (item for item in src if item in self)
+    def filter(self, src, make=AUTO):
+        return filtration((item for item in src if item in self),
+                          type(src), make)
 
-    def filter_out(self, src):
-        return (item for item in src if item not in self)
+    def filter_out(self, src, make=AUTO):
+        return filtration((item for item in src if item not in self),
+                          type(src), make)
 
     def __contains__(self, nominee):
         return self.check(nominee)

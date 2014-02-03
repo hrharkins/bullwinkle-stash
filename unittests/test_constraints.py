@@ -26,16 +26,23 @@ class TestSimpleConstraints(unittest.TestCase):
         self.assertIn(5, ANY(5, 6, 7))
 
     def test_multi(self):
-        ANY(5, 6, 7)(5)
-        ANY(5, 6, 7)(6)
-        ANY(5, 6, 7)(7)
-        self.assertRaises(ValueError, ANY(5, 6, 7), 8)
+        # These should pass...
+        ANY(5, 6, 7)[5]
+        ANY(5, 6, 7)[6]
+        ANY(5, 6, 7)[7]
+
+        # These should bomb...
+        self.assertRaises(ValueError, lambda x: ANY(5, 6, 7)[x], 8)
+        self.assertRaises(ValueError, lambda x: ANY(5, 6, 7)[x,], 8)
 
     def test_filter(self):
-        self.assertEqual([6, 7, 8, 9],
-                list(CHECK(BWC > 5).filter(range(10))))
-        self.assertEqual([0, 1, 2, 3, 4, 5],
-                list(CHECK(BWC > 5).filter_out(range(10))))
+        l = list(range(10))
+        t = tuple(l)
+        g = (n for n in l)
+        self.assertEqual([6, 7, 8, 9], CHECK(BWC > 5).filter(l))
+        self.assertEqual([0, 1, 2, 3, 4, 5], CHECK(BWC > 5).filter_out(l))
+        self.assertEqual([6, 7, 8, 9], list(CHECK(BWC > 5).filter(g)))
+        self.assertEqual((6, 7, 8, 9), CHECK(BWC > 5).filter(t))
 
     def test_convert(self):
         self.assertEqual(7, INTO(int) << '7')
