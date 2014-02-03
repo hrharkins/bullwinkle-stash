@@ -44,6 +44,97 @@ Constraints can be negated via NOT:
     >>> 'white' in NOT(color_enum)
     True
 
+Collection Constraints
+======================
+
+Deeper structures can be modelled by using various constraint types:
+
+    >>> from bw import LIST, TUPLE, ARRAY
+    >>> [] in LIST()
+    True
+    >>> () in LIST()
+    False
+
+ARRAY acts like LIST or TUPLE:
+
+    >>> () in ARRAY()
+    True
+    >>> [] in ARRAY()
+    True
+
+The specification itself can define constraints for the members of the
+collection:
+
+    >>> [2, 3, 4] in LIST(int)
+    True
+    >>> ['hello', 3, 4] in LIST(int)
+    False
+
+And can be checked deeply:
+
+    >>> [(2, 3), 5] in LIST(TUPLE(int), int)
+    True
+
+Unfortunately, this does require validating all of the members, so the
+inner checks should only be used if performance allows.
+
+ARRAY can also be defined by wrapping the constraints in [ ... ] in ANY,
+ALL, CHECK, etc:
+
+    >>> ANY([])
+    ANY(ARRAY())
+    >>> (1, 2, 3) in ANY([])
+    True
+    >>> [1, 2, 3] in ANY([])
+    True
+    >>> ([1, 2], ['hello']) in ANY([[int],[str]])
+    True
+
+Sequence Constraints
+====================
+
+Like collections, the individual elements of sequences can be checked:
+
+    >>> from bw import SEQ
+    >>> (1, 2, 'hello') in SEQ(int, int, str)
+    True
+    >>> (1, 'hello', 'hello') in SEQ(int, int, str)
+    False
+
+These can be combined with collection constraints to check both the type of
+collection and the sequence of elements.  In addition, sequences can be
+short-formed by using tuple:
+
+    >>> [1, 2, 'hello'] in ANY([(int, int, str)])
+    True
+    >>> [1, 'hello', 'hello'] in ANY([(int, int, str)])
+    False
+
+The sequence lengths must match up:
+
+    >>> [1, 2] in SEQ(int, int, int)
+    False
+    >>> [1, 2, 3, 4] in SEQ(int, int, int)
+    False
+
+Sequences can also be combined via addition:
+
+    >>> ISA(int) + ISA(int)
+    SEQ(ISA(int), ISA(int))
+    >>> SEQ(int, int) + SEQ(int)
+    SEQ(ISA(int), ISA(int), ISA(int))
+    >>> SEQ(int, int) + ISA(int)
+    SEQ(ISA(int), ISA(int), ISA(int))
+    >>> ISA(int) + SEQ(int, int)
+    SEQ(ISA(int), ISA(int), ISA(int))
+
+Multiplication also works, but only in a brute-force manner currently:
+
+    >>> 3 * ISA(int)
+    SEQ(ISA(int), ISA(int), ISA(int))
+    >>> (3, 4, 5, 'hello') in ISA(int) * 3 + ISA(str)
+    True
+
 Function Constraints
 ====================
 
@@ -482,6 +573,10 @@ class BWConstraint(object):
             return +obj
         if isinstance(obj, BWConstraint):
             return obj(**_kw)
+        if type(obj) is list:
+            return cls.constraint_array(*obj, **_kw)
+        if type(obj) is tuple:
+            return cls.constraint_sequence(*obj, **_kw)
         if isinstance(obj, type):
             return cls.constraint_pytype(obj, **_kw)
         else:
@@ -504,9 +599,13 @@ class BWConstraint(object):
         return invalid                  # -nout
 
     @classmethod
-    def register(cls, name):
+    def register(cls, name, attr=None):
         def registrar(target_cls):
-            setattr(cls, name, target_cls)
+            if attr is None:
+                factory = target_cls
+            else:
+                factory = getattr(target_cls, attr)
+            setattr(cls, name, factory)
             return target_cls
         return registrar
 
@@ -552,6 +651,19 @@ class BWConstraint(object):
 
     def __invert__(self):
         return NOT(self)
+
+    def __add__(self, other):
+        if isinstance(other, BWSequenceConstraint):
+            return other.__radd__(self)
+        else:
+            return SEQ(*(self, other))
+
+    def __mul__(self, count):
+        return SEQ(*(self,) * count)
+
+    def __rmul__(self, count):
+        return SEQ(*(self,) * count)
+
 CHECK = BWConstraint.from_generic
 
 @BWConstraint.register('constraint_not')
@@ -581,7 +693,10 @@ class BWManyInputConstraint(BWConstraint):
         return self.convert_in(source, self.constraints, invalid)
 
     def __repr__(self):             # -nout
-        return self.repr_in(map(repr, self.constraints))
+        return self.repr_in(self.repr_constraint(c) for c in self.constraints)
+
+    def repr_constraint(self, constraint):
+        return repr(constraint)
 
     @classmethod
     def from_multi(cls, *seq, **_kw):
@@ -759,4 +874,94 @@ class BWIsaConstraint(BWConstraint):
     def __repr__(self):         # -nout
         return 'ISA(%s)' % ', '.join(type.__name__ for type in self.types)
 ISA = BWIsaConstraint
+
+class BWCollectionConstraint(BWManyInputConstraint):
+    collection_types = ()
+    collection_fmt = '%s'
+
+    def check_in(self, nominee, constraints):
+        check_all = False
+        check_all_okay = False
+        for constraint in constraints:
+            fn = getattr(constraint, 'check_all', None)
+            if fn is not None:
+                check_all = True
+                if fn(nominee):
+                    check_all_okay = True
+                    break
+        if check_all and not check_all_okay:
+            return False
+        if isinstance(nominee, self.collection_types):
+            if constraints:
+                for item in nominee:
+                    for constraint in constraints:
+                        if (not hasattr(constraint, 'check_all')
+                            and item in constraint):
+                            return True
+                    else:
+                        # Allow True result if check_all occurred and
+                        # we got here (so they passed).
+                        return check_all
+            else:
+                return True
+        else:
+            return False
+
+    def repr_in(self, constraint_strs): # -nout
+        return self.collection_fmt % ', '.join(constraint_strs)
+
+@BWConstraint.register('constraint_list', 'from_multi')
+class BWListConstraint(BWCollectionConstraint):
+    collection_types = (list,)
+    collection_fmt = 'LIST(%s)'
+LIST = BWListConstraint.from_multi
+
+@BWConstraint.register('constraint_tuple', 'from_multi')
+class BWTupleConstraint(BWCollectionConstraint):
+    collection_types = (tuple,)
+    collection_fmt = 'TUPLE(%s)'
+TUPLE = BWTupleConstraint.from_multi
+
+@BWConstraint.register('constraint_array', 'from_multi')
+class BWArrayConstraint(BWListConstraint, BWTupleConstraint):
+    collection_types = (list, tuple)
+    collection_fmt = 'ARRAY(%s)'
+ARRAY = BWArrayConstraint.from_multi
+
+@BWConstraint.register('constraint_sequence', 'from_multi')
+class BWSequenceConstraint(BWManyInputConstraint):
+    def check_in(self, nominee, constraints):
+        try:
+            src = iter(nominee)
+        except TypeError:           # -nodt -- edge case for unittest
+            return False
+        for constraint in constraints:
+            for item in src:
+                if item not in constraint:
+                    return False
+                break   # Get next item and constraint.
+            else:
+                # Out of items.
+                return False
+        else:
+            for item in src:
+                return False        # Too many items
+            else:
+                return True         # All good...
+
+    def check_all(self, nominee):
+        return self.check(nominee)
+
+    def repr_in(self, constraint_strs): # -nout
+        return 'SEQ(%s)' % ', '.join(constraint_strs)
+
+    def __add__(self, other):
+        if isinstance(other, BWSequenceConstraint):
+            return type(self)(*(self.constraints + other.constraints))
+        else:
+            return type(self)(*(self.constraints + (other,)))
+
+    def __radd__(self, other):
+        return type(self)(*((other,) + self.constraints))
+SEQ = BWSequenceConstraint.from_multi
 

@@ -158,3 +158,47 @@ class TestBWC(unittest.TestCase):
         self.assertIs(+bwc, +bwc)
         self.assertIs(+bwc, ++bwc)
 
+class TestCollectionConstraints(unittest.TestCase):
+    def test_list(self):
+        self.assertIn([2, 3, 4], LIST())
+        self.assertNotIn((2, 3, 4), LIST())
+        self.assertIn([2, 3, 4], LIST(int))
+        self.assertNotIn(['hello', 3, 4], LIST(int))
+
+    def test_tuple(self):
+        self.assertIn((2, 3, 4), TUPLE())
+        self.assertNotIn([2, 3, 4], TUPLE())
+        self.assertIn((2, 3, 4), TUPLE(int))
+        self.assertNotIn(('hello', 3, 4), TUPLE(int))
+
+    def test_array(self):
+        self.assertIn((2, 3, 4), ARRAY())
+        self.assertIn([2, 3, 4], ARRAY())
+        self.assertIn((2, 3, 4), CHECK([int]))
+        self.assertNotIn(('hello', 3, 4), ARRAY(int))
+
+class TestSequenceConstraints(unittest.TestCase):
+    def test_simple(self):
+        self.assertIn((3, 4, 5), CHECK((int, int, int)))
+
+    def test_addition(self):
+        self.assertIn((3, 4, 5), SEQ(int, int) + ISA(int))
+        self.assertIn((3, 4, 5), SEQ(int, int) + SEQ(int))
+        self.assertIn((3, 4, 5), ISA(int) + SEQ(int, int))
+        self.assertIn((3, 4, 5), ISA(int) + ISA(int) + ISA(int))
+
+    def test_multiplication(self):
+        self.assertIn((3, 4, 5), ISA(int) * 3)
+        self.assertIn((3, 4, 5), 3 * ISA(int))
+
+    def test_collection_sequence(self):
+        self.assertIn((3, 4, 5), CHECK([ISA(int) * 3]))
+        self.assertNotIn((3, 4, 'hello'), CHECK([ISA(int) * 3]))
+
+    def test_non_iterable(self):
+        self.assertNotIn(3, CHECK([ISA(int) * 3]))
+
+    def test_bad_lengths(self):
+        self.assertNotIn((3, 4), CHECK([ISA(int) * 3]))
+        self.assertNotIn((3, 4, 5, 6), CHECK([ISA(int) * 3]))
+
